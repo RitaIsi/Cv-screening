@@ -122,14 +122,83 @@ Open your browser at `http://localhost:5173`.
 
 ---
 
+## AI Setup & Gemini Integration
+
+HireMatch uses the Google Gemini API through a single secure Supabase Edge Function (`ai-screen`) to extract qualifications, generate 2–3 sentence scan-friendly summaries, and generate 768-dimensional semantic embeddings for CVs and job postings.
+
+### 1. Run the Database Migration (`/supabase/ai_stage.sql`)
+1. In the Supabase Dashboard left sidebar, click **SQL Editor**.
+2. Click **New Query**.
+3. Copy the contents of [`/supabase/ai_stage.sql`](./supabase/ai_stage.sql) and paste it into the editor.
+4. Click **Run** (or press Ctrl+Enter).
+   - Adds `cv_text` (text), `cv_summary` (text), `cv_embedding` (float8[]), and `cv_analyzed_at` (timestamptz) to `public.profiles`.
+   - Adds `embedding` (float8[]) to `public.jobs`.
+   - Preserves all Row Level Security (RLS) policies.
+
+### 2. Set the `GEMINI_API_KEY` Edge Function Secret
+> **Security Note:** The Gemini API key never appears in the React frontend, any repository file, or `.env`. It is stored exclusively as a Supabase Edge Function secret.
+
+Choose either the Dashboard or CLI option:
+
+#### Option A: Supabase Dashboard
+1. Go to your Supabase Project Dashboard.
+2. In the left sidebar, click **Edge Functions** (or **Project Settings** > **Edge Functions**).
+3. Select **Secrets** (or **Manage Secrets**).
+4. Click **Add new secret**:
+   - **Name:** `GEMINI_API_KEY`
+   - **Value:** `<your-google-gemini-api-key>`
+5. *(Optional)* You can also configure model overrides:
+   - `GEMINI_TEXT_MODEL` (default: `gemini-3.1-flash-lite`)
+   - `GEMINI_EMBED_MODEL` (default: `gemini-embedding-001`)
+
+#### Option B: Supabase CLI
+```bash
+npx supabase secrets set GEMINI_API_KEY="your-google-gemini-api-key"
+```
+
+### 3. Deploy the Edge Function via Supabase CLI
+Run these exact commands in your terminal from the project root:
+
+```bash
+# 1. Log in to your Supabase account
+npx supabase login
+
+# 2. Link your local project directory to your remote Supabase project
+# (Find your Project Reference ID in Project Settings > General)
+npx supabase link --project-ref <your-project-ref>
+
+# 3. Deploy the ai-screen edge function
+npx supabase functions deploy ai-screen
+```
+
+### 4. Prepare AI Matching for Seed Jobs (Backfill Button)
+1. Sign in to HireMatch with a **Recruiter** account.
+2. Navigate to the **Recruiter Dashboard** (`/recruiter/dashboard`).
+3. Click the **"Prepare AI matching for existing jobs"** button in the header.
+4. The Edge Function runs with the backend service role to generate and store 768-dimensional embeddings for all 8 seed jobs (and any jobs missing embeddings). A notification will confirm how many jobs were updated.
+
+---
+
 ## AI Service Architecture (`src/services/aiService.js`)
 
-All scoring and ranking logic is strictly encapsulated in `src/services/aiService.js`. No other file contains matching formulas.
+All scoring and ranking logic is strictly encapsulated in `src/services/aiService.js`.
 
-- **`calculateMatchScore(seekerProfile, job)`**: Computes an integer score from 0 to 100 based on:
-  - **70% Skills Overlap:** Proportion of job's required skills present in candidate's competencies.
-  - **30% Experience Met:** Ratio of candidate's experience against the minimum required years.
-- **`rankJobsForSeeker(seekerProfile, jobs)`**: Takes a candidate profile and a list of jobs, computes each match score, and returns the jobs sorted descending.
-- **`rankApplicants(applicants, job)`**: Takes a job and its applicants, calculates each candidate's score, and returns an ordered leaderboard.
+- **Client-Side Scoring (Zero API Calls During Browsing):**
+  - Match calculation runs synchronously in the browser using pre-computed vector embeddings and attributes already stored in PostgreSQL.
+  - No Gemini tokens, quota, or rate limits are consumed when seekers browse jobs or recruiters review applicants.
 
-When the thesis reaches the ML stage, replace the internal logic in `src/services/aiService.js` with your NLP / vector embeddings API call without touching any UI or database code.
+- **Scoring Formula (0 - 100):**
+  - **50% Semantic Similarity:** Cosine similarity between the candidate's `cv_embedding` and the job's `embedding` (rescaled to 0–100).
+  - **35% Skill Overlap:** Proportion of job's `required_skills` matched by the candidate's skills (case-insensitive).
+  - **15% Experience Met:** Ratio of candidate's `experience_years` against `min_experience`.
+  - **Fallback Formula:** If either vector embedding is missing, the engine automatically falls back to 70% skills + 30% experience so nothing breaks.
+
+- **Available Helpers:**
+  - `calculateMatchScore(seekerProfile, job)`: Returns integer 0–100.
+  - `rankJobsForSeeker(seekerProfile, jobs)`: Returns jobs sorted by descending score with matched skills attached.
+  - `rankApplicants(applicants, job)`: Returns applicants sorted by descending score with matched and missing skills attached.
+  - `getMatchedSkills(profile, job)`: Returns candidate skills that match role requirements.
+  - `getMissingSkills(profile, job)`: Returns required skills that the candidate lacks.
+  - `analyzeCv(text)`: Calls Edge Function to extract structured fields and 768-dim embedding.
+  - `embedJob(job)`: Calls Edge Function to generate 768-dim embedding for a job.
+  - `backfillJobs()`: Calls Edge Function to embed all un-embedded jobs.

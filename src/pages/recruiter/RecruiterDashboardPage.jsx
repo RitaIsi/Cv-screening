@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getRecruiterJobs, deleteJob } from '../../services/jobService';
+import { backfillJobs } from '../../services/aiService';
 import {
   Briefcase,
   Users,
@@ -13,6 +14,8 @@ import {
   MapPin,
   AlertCircle,
   ArrowRight,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 export default function RecruiterDashboardPage() {
@@ -20,6 +23,7 @@ export default function RecruiterDashboardPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [backfilling, setBackfilling] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -62,6 +66,30 @@ export default function RecruiterDashboardPage() {
     }
   };
 
+  const handleBackfillJobs = async () => {
+    setBackfilling(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await backfillJobs();
+      if (res?.count > 0) {
+        setSuccessMsg(`Successfully prepared AI matching for ${res.count} existing job(s)!`);
+      } else {
+        setSuccessMsg('All existing jobs already have AI matching embeddings prepared.');
+      }
+      await loadJobs();
+    } catch (err) {
+      console.error('Backfill jobs error:', err);
+      if (err.code === 'RATE_LIMIT_EXCEEDED' || err.message?.includes('busy')) {
+        setErrorMsg('The AI is busy, please try again in a minute.');
+      } else {
+        setErrorMsg(err.message || 'Failed to backfill job embeddings.');
+      }
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   // Calculate high-level metrics
   const totalJobs = jobs.length;
   const totalApplicants = jobs.reduce((acc, j) => acc + (j.applicant_count || 0), 0);
@@ -86,9 +114,28 @@ export default function RecruiterDashboardPage() {
             Manage your company listings, monitor applicant volume, and evaluate AI screening scores.
           </p>
         </div>
-        <Link to="/recruiter/jobs/new" className="btn btn-primary" style={{ gap: '6px' }}>
-          <PlusCircle size={16} /> Post New Job
-        </Link>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={handleBackfillJobs}
+            disabled={backfilling}
+            className="btn btn-secondary btn-sm"
+            style={{ gap: '6px' }}
+            title="Generates AI embeddings for any existing seed or un-embedded jobs"
+          >
+            {backfilling ? (
+              <>
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Preparing AI matching...
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} color="var(--color-primary)" /> Prepare AI matching for existing jobs
+              </>
+            )}
+          </button>
+          <Link to="/recruiter/jobs/new" className="btn btn-primary" style={{ gap: '6px' }}>
+            <PlusCircle size={16} /> Post New Job
+          </Link>
+        </div>
       </div>
 
       {successMsg && (

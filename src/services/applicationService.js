@@ -111,7 +111,9 @@ export async function getJobApplications(jobId) {
         skills,
         experience_years,
         education,
-        cv_path
+        cv_path,
+        cv_summary,
+        cv_embedding
       )
     `)
     .eq('job_id', jobId);

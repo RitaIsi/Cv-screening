@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getJobById } from '../../services/jobService';
 import { getJobApplications, updateApplicationStatus } from '../../services/applicationService';
-import { rankApplicants, getMatchingSkills } from '../../services/aiService';
+import { rankApplicants, getMatchingSkills, getMatchedSkills, getMissingSkills } from '../../services/aiService';
 import { downloadCV, getCVSignedUrl } from '../../services/storageService';
 import MatchBadge from '../../components/MatchBadge';
 import StatusBadge from '../../components/StatusBadge';
@@ -220,7 +220,8 @@ export default function JobApplicantsPage() {
           {filteredApplicants.map((app, index) => {
             const seeker = app.seeker || {};
             const seekerSkills = Array.isArray(seeker.skills) ? seeker.skills : [];
-            const matchedSkills = getMatchingSkills(seekerSkills, job?.required_skills);
+            const matchedSkills = getMatchedSkills(seeker, job);
+            const missingSkills = getMissingSkills(seeker, job);
             const extraSkills = seekerSkills.filter(
               (s) => !matchedSkills.some((m) => m.toLowerCase() === s.toLowerCase())
             );
@@ -264,23 +265,61 @@ export default function JobApplicantsPage() {
                     </span>
                   </div>
 
+                  {/* AI CV Summary */}
+                  {seeker.cv_summary && (
+                    <div
+                      style={{
+                        marginBottom: '14px',
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--color-neutral)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        borderLeft: '3px solid var(--color-primary)',
+                      }}
+                    >
+                      <span className="label-sm text-muted" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        AI Summary
+                      </span>
+                      <p className="body-sm" style={{ color: 'var(--color-on-surface)', lineHeight: '1.45' }}>
+                        {seeker.cv_summary}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Skills tags */}
                   <div>
-                    <span className="label-sm text-muted" style={{ display: 'block', marginBottom: '4px' }}>
-                      Competencies:
+                    <span className="label-sm text-muted" style={{ display: 'block', marginBottom: '6px' }}>
+                      Skills Evaluation:
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {/* Matched required skills */}
                       {matchedSkills.map((s) => (
                         <span key={s} className="hm-chip hm-chip-accent" title="Matches job requirement">
                           ✓ {s}
                         </span>
                       ))}
+                      {/* Missing required skills in muted style */}
+                      {missingSkills.map((s) => (
+                        <span
+                          key={s}
+                          className="hm-chip hm-chip-secondary"
+                          style={{
+                            color: 'var(--color-muted)',
+                            borderColor: 'var(--color-border)',
+                            opacity: 0.75,
+                          }}
+                          title="Missing required skill for this role"
+                        >
+                          ✕ {s}
+                        </span>
+                      ))}
+                      {/* Candidate extra competencies */}
                       {extraSkills.map((s) => (
                         <span key={s} className="hm-chip" style={{ opacity: 0.75 }}>
                           {s}
                         </span>
                       ))}
-                      {seekerSkills.length === 0 && (
+                      {seekerSkills.length === 0 && missingSkills.length === 0 && (
                         <span className="body-sm text-muted">No skills listed</span>
                       )}
                     </div>
@@ -299,7 +338,9 @@ export default function JobApplicantsPage() {
                   }}
                   id={`recruiter-actions-${app.id}`}
                 >
-                  <MatchBadge score={app.match_score} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <MatchBadge score={app.match_score} />
+                  </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {seeker.cv_path ? (

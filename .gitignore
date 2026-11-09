@@ -1,6 +1,23 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+build/
+
+# Environment files
 .env
 .env.local
+.env.*.local
+!.env.example
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
+
+# Supabase temporary & branch files
+supabase/.temp/
+supabase/.branches/

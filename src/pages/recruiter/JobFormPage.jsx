@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createJob, getJobById, updateJob } from '../../services/jobService';
+import { embedJob } from '../../services/aiService';
 import SkillChipInput from '../../components/SkillChipInput';
 import { ArrowLeft, CheckCircle2, AlertCircle, Save } from 'lucide-react';
 
@@ -82,6 +83,21 @@ export default function JobFormPage() {
 
     setSubmitting(true);
     try {
+      // Generate job semantic embedding via AI Edge function
+      let embedding = null;
+      try {
+        const embedResult = await embedJob({
+          title: title.trim(),
+          description: description.trim(),
+          required_skills: requiredSkills,
+        });
+        if (Array.isArray(embedResult?.embedding)) {
+          embedding = embedResult.embedding;
+        }
+      } catch (embedErr) {
+        console.warn('AI embedding generation note (proceeding with job save):', embedErr);
+      }
+
       const payload = {
         title: title.trim(),
         company: company.trim(),
@@ -91,6 +107,7 @@ export default function JobFormPage() {
         required_skills: requiredSkills,
         description: description.trim(),
         recruiter_id: user.id,
+        ...(embedding ? { embedding } : {}),
       };
 
       if (isEditing) {
