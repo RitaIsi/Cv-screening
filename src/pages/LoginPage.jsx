@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const location = useLocation();
 
   const from = location.state?.from?.pathname;
+  const successMsg = location.state?.successMsg;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,6 +57,13 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {successMsg && !errorMsg && (
+          <div className="alert-box success" role="status">
+            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         {errorMsg && (
           <div className="alert-box error" role="alert">
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -95,6 +103,11 @@ export default function LoginPage() {
               placeholder="••••••••"
               required
             />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <Link to="/forgot-password" className="body-sm text-muted" style={{ textDecoration: 'none' }}>
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           <button

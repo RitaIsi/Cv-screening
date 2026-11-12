@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Briefcase, User, FileText, PlusCircle, LogOut, Menu, X } from 'lucide-react';
 
@@ -7,6 +7,11 @@ export default function Navbar() {
   const { user, profile, role, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isLoggedOutRoute =
+    location.pathname === '/forgot-password' || location.pathname === '/reset-password';
+  const showLoggedOutNav = !user || isLoggedOutRoute;
 
   const handleSignOut = async () => {
     await signOut();
@@ -29,7 +34,7 @@ export default function Navbar() {
           {/* Desktop Navigation Links */}
           <nav className="hm-nav-links" style={{ display: 'none' }} id="desktop-nav">
             {/* Conditional Links by Auth Role */}
-            {!user ? (
+            {showLoggedOutNav ? (
               <Link to="/login" className="hm-nav-link">
                 Log In
               </Link>
@@ -128,7 +133,7 @@ export default function Navbar() {
               gap: '12px',
             }}
           >
-            {!user ? (
+            {showLoggedOutNav ? (
               <Link to="/login" className="hm-nav-link" onClick={closeMenu}>
                 Log In
               </Link>

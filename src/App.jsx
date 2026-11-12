@@ -10,6 +10,8 @@ import PublicRoute from './components/PublicRoute';
 // Public Pages
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Seeker Pages
 import SeekerProfilePage from './pages/seeker/SeekerProfilePage';
@@ -48,6 +50,8 @@ export default function App() {
             }
           />
           <Route path="/signup" element={<Navigate to="/" replace />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Job Seeker Protected Routes */}
           <Route
