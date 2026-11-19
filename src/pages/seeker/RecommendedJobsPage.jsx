@@ -46,11 +46,27 @@ export default function RecommendedJobsPage() {
   return (
     <div className="app-container" style={{ paddingTop: 'var(--space-md)' }}>
       {/* Header */}
-      <div style={{ marginBottom: 'var(--space-md)' }}>
-        <h1 className="headline-md">Recommended Opportunities</h1>
-        <p className="body-sm text-muted" style={{ marginTop: '4px' }}>
-          Jobs sorted by compatibility score based on your profile skills and experience.
-        </p>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: 'var(--space-md)',
+        }}
+      >
+        <div>
+          <h1 className="headline-md">Recommended Opportunities</h1>
+          <p className="body-sm text-muted" style={{ marginTop: '4px' }}>
+            Jobs sorted by compatibility score based on your profile skills and experience.
+          </p>
+        </div>
+
+        <Link to="/seeker/report" className="btn btn-primary btn-sm" style={{ gap: '6px' }}>
+          <FileText size={15} />
+          Generate Recommendation Report
+        </Link>
       </div>
 
       {/* CV Missing Banner Alert */}

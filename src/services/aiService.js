@@ -125,34 +125,63 @@ export function getMissingSkills(profile = {}, job = {}) {
 }
 
 /**
- * Calculates a match score (0 - 100) between a job seeker profile and a job posting.
- * Uses 50% semantic similarity + 35% skills + 15% experience when embeddings exist,
- * otherwise falls back cleanly to 70% skills + 30% experience.
- * 
- * @param {Object} seekerProfile - Seeker profile with { skills, experience_years, cv_embedding }
- * @param {Object} job - Job posting with { required_skills, min_experience, embedding }
- * @returns {number} Integer between 0 and 100
+ * Returns a human-readable match category label for a 0-100 score.
+ *   - 75-100: "Strong match"
+ *   - 50-74:  "Moderate match"
+ *   - 0-49:   "Low match"
+ *
+ * @param {number} score
+ * @returns {string}
  */
-export function calculateMatchScore(seekerProfile = {}, job = {}) {
-  const candidateSkills = extractProfileSkills(seekerProfile);
+export function getMatchLabel(score) {
+  const num = Number(score) || 0;
+  if (num >= 75) return 'Strong match';
+  if (num >= 50) return 'Moderate match';
+  return 'Low match';
+}
+
+/**
+ * Computes the full match score breakdown between a seeker profile and a job.
+ * Each component score (semantic, skills, experience) is on a 0-100 scale,
+ * and total is the weighted result:
+ *   - With embeddings: 50% semantic similarity + 35% skills + 15% experience
+ *   - Fallback (missing embedding): 70% skills + 30% experience (usedFallback = true, semantic = null)
+ *
+ * @param {Object} profile - Seeker profile with { skills, experience_years, cv_embedding }
+ * @param {Object} job - Job posting with { required_skills, min_experience, embedding }
+ * @returns {{
+ *   total: number,
+ *   semantic: number | null,
+ *   skills: number,
+ *   experience: number,
+ *   matchedSkills: string[],
+ *   missingSkills: string[],
+ *   usedFallback: boolean
+ * }}
+ */
+export function getScoreBreakdown(profile = {}, job = {}) {
   const jobSkills = Array.isArray(job?.required_skills) ? job.required_skills : [];
-  const seekerExp = Number(seekerProfile?.experience_years) || 0;
+  const seekerExp = Number(profile?.experience_years) || 0;
   const minExp = Number(job?.min_experience) || 0;
 
-  // Calculate skill overlap ratio
+  const matchedSkills = getMatchedSkills(profile, job);
+  const missingSkills = getMissingSkills(profile, job);
+
+  // Calculate skill overlap ratio (0..1) and 0-100 score
   let skillRatio = 1;
   if (jobSkills.length > 0) {
-    const matched = getMatchingSkills(candidateSkills, jobSkills);
-    skillRatio = Math.min(1, matched.length / jobSkills.length);
+    skillRatio = Math.min(1, matchedSkills.length / jobSkills.length);
   }
+  const skills = Math.max(0, Math.min(100, Math.round(skillRatio * 100)));
 
-  // Calculate experience ratio
+  // Calculate experience ratio (0..1) and 0-100 score
   let expRatio = 1;
   if (minExp > 0) {
     expRatio = Math.min(1, seekerExp / minExp);
   }
+  const experience = Math.max(0, Math.min(100, Math.round(expRatio * 100)));
 
-  const cvEmbedding = seekerProfile?.cv_embedding;
+  const cvEmbedding = profile?.cv_embedding;
   const jobEmbedding = job?.embedding;
   const hasEmbeddings =
     Array.isArray(cvEmbedding) &&
@@ -161,24 +190,50 @@ export function calculateMatchScore(seekerProfile = {}, job = {}) {
     jobEmbedding.length > 0;
 
   if (hasEmbeddings) {
-    // 50% Semantic similarity, 35% Skill overlap, 15% Experience
     const rawCosine = cosineSimilarity(cvEmbedding, jobEmbedding);
-    // Cosine similarity typically ranges 0.0 - 1.0 for positive semantic relevance
     const semanticRatio = Math.max(0, Math.min(1, rawCosine));
+    const semantic = Math.max(0, Math.min(100, Math.round(semanticRatio * 100)));
 
-    const semanticScore = semanticRatio * 50;
-    const skillScore = skillRatio * 35;
-    const expScore = expRatio * 15;
+    const total = Math.max(
+      0,
+      Math.min(100, Math.round(semanticRatio * 50 + skillRatio * 35 + expRatio * 15))
+    );
 
-    const total = Math.round(semanticScore + skillScore + expScore);
-    return Math.max(0, Math.min(100, total));
+    return {
+      total,
+      semantic,
+      skills,
+      experience,
+      matchedSkills,
+      missingSkills,
+      usedFallback: false,
+    };
   }
 
   // Fallback formula: 70% Skills, 30% Experience
-  const skillScore = skillRatio * 70;
-  const expScore = expRatio * 30;
-  const total = Math.round(skillScore + expScore);
-  return Math.max(0, Math.min(100, total));
+  const total = Math.max(0, Math.min(100, Math.round(skillRatio * 70 + expRatio * 30)));
+
+  return {
+    total,
+    semantic: null,
+    skills,
+    experience,
+    matchedSkills,
+    missingSkills,
+    usedFallback: true,
+  };
+}
+
+/**
+ * Calculates a match score (0 - 100) between a job seeker profile and a job posting.
+ * Delegates to getScoreBreakdown so there is only a single scoring formula.
+ * 
+ * @param {Object} seekerProfile - Seeker profile with { skills, experience_years, cv_embedding }
+ * @param {Object} job - Job posting with { required_skills, min_experience, embedding }
+ * @returns {number} Integer between 0 and 100
+ */
+export function calculateMatchScore(seekerProfile = {}, job = {}) {
+  return getScoreBreakdown(seekerProfile, job).total;
 }
 
 /**

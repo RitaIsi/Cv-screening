@@ -158,6 +158,15 @@ export default function JobApplicantsPage() {
             {job?.company} • {applicants.length} total applicant{applicants.length === 1 ? '' : 's'} ranked by AI match score.
           </p>
         </div>
+
+        <Link
+          to={`/recruiter/jobs/${jobId}/report`}
+          className="btn btn-primary btn-sm"
+          style={{ gap: '6px' }}
+        >
+          <FileText size={15} />
+          Generate Screening Report
+        </Link>
       </div>
 
       {successMsg && (

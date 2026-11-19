@@ -18,11 +18,13 @@ import SeekerProfilePage from './pages/seeker/SeekerProfilePage';
 import RecommendedJobsPage from './pages/seeker/RecommendedJobsPage';
 import JobDetailsPage from './pages/seeker/JobDetailsPage';
 import SeekerApplicationsPage from './pages/seeker/SeekerApplicationsPage';
+import SeekerRecommendationReportPage from './pages/seeker/SeekerRecommendationReportPage';
 
 // Recruiter Pages
 import RecruiterDashboardPage from './pages/recruiter/RecruiterDashboardPage';
 import JobFormPage from './pages/recruiter/JobFormPage';
 import JobApplicantsPage from './pages/recruiter/JobApplicantsPage';
+import JobScreeningReportPage from './pages/recruiter/JobScreeningReportPage';
 
 export default function App() {
   return (
@@ -86,6 +88,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/seeker/report"
+            element={
+              <ProtectedRoute allowedRoles={['seeker']}>
+                <SeekerRecommendationReportPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Recruiter Protected Routes */}
           <Route
@@ -117,6 +127,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['recruiter']}>
                 <JobApplicantsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/jobs/:id/report"
+            element={
+              <ProtectedRoute allowedRoles={['recruiter']}>
+                <JobScreeningReportPage />
               </ProtectedRoute>
             }
           />

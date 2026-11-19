@@ -1,9 +1,9 @@
 import { supabase } from '../lib/supabase';
-import { calculateMatchScore } from './aiService';
+import { calculateMatchScore, getScoreBreakdown } from './aiService';
 
 /**
  * Submits an application for a seeker to a job.
- * Calculates the match score via the isolated aiService and persists it.
+ * Calculates the match score and breakdown via the isolated aiService and persists them.
  * 
  * @param {Object} params
  * @param {string} params.jobId
@@ -16,21 +16,41 @@ export async function applyToJob({ jobId, seekerId, seekerProfile, job }) {
     throw new Error('Please upload a CV to your profile before applying to jobs.');
   }
 
-  // Calculate match score exclusively through aiService
+  // Calculate match score and breakdown exclusively through aiService
+  const breakdown = getScoreBreakdown(seekerProfile, job);
   const matchScore = calculateMatchScore(seekerProfile, job);
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('applications')
     .insert([
       {
         job_id: jobId,
         seeker_id: seekerId,
         match_score: matchScore,
+        score_breakdown: breakdown,
         status: 'pending',
       },
     ])
     .select()
     .single();
+
+  // Graceful fallback if report_stage.sql has not been executed yet
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || /score_breakdown/i.test(error.message || ''))) {
+    const fallbackRes = await supabase
+      .from('applications')
+      .insert([
+        {
+          job_id: jobId,
+          seeker_id: seekerId,
+          match_score: matchScore,
+          status: 'pending',
+        },
+      ])
+      .select()
+      .single();
+    data = fallbackRes.data;
+    error = fallbackRes.error;
+  }
 
   if (error) {
     if (error.code === '23505') {
@@ -96,13 +116,14 @@ export async function getSeekerApplications(seekerId) {
  * Retrieves all applications for a specific job, joined with seeker profile info.
  */
 export async function getJobApplications(jobId) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('applications')
     .select(`
       id,
       job_id,
       seeker_id,
       match_score,
+      score_breakdown,
       status,
       created_at,
       seeker:seeker_id (
@@ -117,6 +138,32 @@ export async function getJobApplications(jobId) {
       )
     `)
     .eq('job_id', jobId);
+
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || /score_breakdown/i.test(error.message || ''))) {
+    const fallbackRes = await supabase
+      .from('applications')
+      .select(`
+        id,
+        job_id,
+        seeker_id,
+        match_score,
+        status,
+        created_at,
+        seeker:seeker_id (
+          id,
+          full_name,
+          skills,
+          experience_years,
+          education,
+          cv_path,
+          cv_summary,
+          cv_embedding
+        )
+      `)
+      .eq('job_id', jobId);
+    data = fallbackRes.data;
+    error = fallbackRes.error;
+  }
 
   if (error) {
     console.error('Error fetching job applications:', error);

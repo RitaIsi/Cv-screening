@@ -194,7 +194,9 @@ All scoring and ranking logic is strictly encapsulated in `src/services/aiServic
   - **Fallback Formula:** If either vector embedding is missing, the engine automatically falls back to 70% skills + 30% experience so nothing breaks.
 
 - **Available Helpers:**
-  - `calculateMatchScore(seekerProfile, job)`: Returns integer 0–100.
+  - `getScoreBreakdown(profile, job)`: Returns `{ total, semantic, skills, experience, matchedSkills, missingSkills, usedFallback }` where `semantic`, `skills`, and `experience` are each 0–100 (`semantic = null` when `usedFallback = true`).
+  - `calculateMatchScore(seekerProfile, job)`: Calls `getScoreBreakdown` and returns integer 0–100.
+  - `getMatchLabel(score)`: Returns `"Strong match"` (75–100), `"Moderate match"` (50–74), or `"Low match"` (0–49).
   - `rankJobsForSeeker(seekerProfile, jobs)`: Returns jobs sorted by descending score with matched skills attached.
   - `rankApplicants(applicants, job)`: Returns applicants sorted by descending score with matched and missing skills attached.
   - `getMatchedSkills(profile, job)`: Returns candidate skills that match role requirements.
@@ -202,3 +204,35 @@ All scoring and ranking logic is strictly encapsulated in `src/services/aiServic
   - `analyzeCv(text)`: Calls Edge Function to extract structured fields and 768-dim embedding.
   - `embedJob(job)`: Calls Edge Function to generate 768-dim embedding for a job.
   - `backfillJobs()`: Calls Edge Function to embed all un-embedded jobs.
+
+---
+
+## Reports
+
+HireMatch provides two on-screen and downloadable reports powered purely by stored profile, job, and application data (zero extra Gemini API calls):
+
+### 1. Recruiter: CV Screening Report (`/recruiter/jobs/:id/report`)
+- Accessible from the **"Generate Screening Report"** button on a job's Applicants page (restricted to the recruiter who owns the job).
+- Displays the company name, generation date/time, job specifications (title, location, type, required skills, minimum experience), the scoring method note (50% semantic similarity, 35% skill match, 15% experience), summary counts (total applicants, strong/moderate/low matches, shortlisted), and a ranked candidate table with total score, match label, the three 0–100 component scores (`score_breakdown` captured at application time, or `"Breakdown not available"` for older applications), matched skills, missing skills, application status, and the AI CV summary beneath each candidate row.
+
+### 2. Job Seeker: Job Recommendation Report (`/seeker/report`)
+- Accessible from the **"Generate Recommendation Report"** button on the Recommended Jobs page.
+- Displays the generation date/time, the seeker's profile (name, education, years of experience, skills, and AI CV summary), the scoring method note, the top 10 ranked jobs with total score, match label, the three 0–100 component scores, matched skills, and **Skills to improve** (missing required skills), followed by a closing section highlighting the skills missing most often across the top recommended jobs.
+
+### 3. Download Formats (`src/services/reportExport.js`)
+Both report pages are print-friendly and offer three instant browser downloads generated from a single normalized data object:
+- **PDF (`.pdf`):** Generated with `jspdf` and `jspdf-autotable`, featuring the `HireMatch.` wordmark, structured headings, multi-page tables, generated timestamp, and page numbers.
+- **Excel (`.xlsx`):** Generated with `exceljs` as a two-sheet workbook:
+  - `Summary`: Report metadata, job or seeker details, scoring method note, and summary counts.
+  - `Candidates` or `Recommended Jobs`: Full ranked table with a bold frozen header row, numeric score cells, comma-separated skills, wrapped AI summary text, and thin borders.
+- **CSV (`.csv`):** UTF-8 BOM encoded ranked table with identical columns to the Excel table sheet and properly escaped commas, quotes, and line breaks.
+- **File naming:**
+  - `hirematch-screening-report-{job-title}-{date}.{pdf|xlsx|csv}`
+  - `hirematch-recommendation-report-{name}-{date}.{pdf|xlsx|csv}`
+
+### 4. Run the Reporting Database Migration (`/supabase/report_stage.sql`)
+1. Open your **Supabase Dashboard** and go to **SQL Editor**.
+2. Click **New Query**.
+3. Copy the contents of [`/supabase/report_stage.sql`](./supabase/report_stage.sql) and paste it into the editor.
+4. Click **Run** (or press Ctrl+Enter).
+   - Adds `score_breakdown` (`jsonb`) to `public.applications` to persist component scores at the time of application while keeping all existing Row Level Security (RLS) policies intact.
